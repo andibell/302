@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
+import CircularScore from '../components/common/CircularScore.vue'
 import {
   aggregateQualityObservations,
   availableQualityPeriods,
@@ -70,12 +71,6 @@ function allLatestQualityRows() {
   return dataQualityObservations.filter((row) => row.period === latestPeriod)
 }
 
-function scoreStyle(score) {
-  return {
-    '--score-angle': `${Math.max(0, Math.min(100, score ?? 0)) * 2.7}deg`,
-  }
-}
-
 function formatScore(score) {
   return Number.isFinite(score) ? `${score.toFixed(1)}%` : '—'
 }
@@ -105,16 +100,13 @@ function fileScoreStatus(status) {
             {{ qualityStatus }}
           </span>
         </header>
-        <div
+        <CircularScore
           class="score-gauge"
-          :style="scoreStyle(latestSummary.overallScore)"
-          role="img"
-          :aria-label="`Overall data quality ${formatScore(latestSummary.overallScore)}, ${qualityStatus}`"
-        >
-          <div class="score-gauge__center">
-            <strong>{{ formatScore(latestSummary.overallScore) }}</strong>
-          </div>
-        </div>
+          :score="latestSummary.overallScore"
+          :status="qualityStatus"
+          variant="quality"
+          :accessible-label="`Overall data quality ${formatScore(latestSummary.overallScore)}, ${qualityStatus}`"
+        />
         <p class="score-card-period">LATEST REPORTING PERIOD</p>
         <p class="score-card-period__date">{{ formatShortPeriod(latestPeriod) }}</p>
         <dl class="score-dimensions">
@@ -133,16 +125,13 @@ function fileScoreStatus(status) {
           <span>Binder Controls</span>
           <span class="status-pill status--healthy">On track</span>
         </header>
-        <div
-          class="score-gauge score-gauge--binder"
-          :style="scoreStyle(binderScore)"
-          role="img"
-          :aria-label="`Records received ${formatScore(binderScore)} of expected records`"
-        >
-          <div class="score-gauge__center">
-            <strong>{{ formatScore(binderScore) }}</strong>
-          </div>
-        </div>
+        <CircularScore
+          class="score-gauge"
+          :score="binderScore"
+          status="On track"
+          variant="standard"
+          :accessible-label="`Records received ${formatScore(binderScore)} of expected records`"
+        />
         <p class="binder-card__caption">
           {{ latestSummary.recordsReceived.toLocaleString() }} of
           {{ latestSummary.recordsExpected.toLocaleString() }} expected records received
@@ -372,51 +361,10 @@ function fileScoreStatus(status) {
 }
 
 .score-gauge {
-  display: grid;
+  display: block;
   width: 10.5rem;
   aspect-ratio: 1;
-  place-items: center;
   margin-top: 1.1rem;
-  border-radius: 50%;
-  background: conic-gradient(
-    from 225deg,
-    #dc294a 0deg,
-    #ef8d45 80deg,
-    #52bd85 var(--score-angle),
-    #e8eef2 var(--score-angle),
-    #e8eef2 270deg,
-    transparent 270deg
-  );
-  clip-path: polygon(0 0, 100% 0, 100% 75%, 50% 100%, 0 75%);
-}
-
-.score-gauge__center {
-  display: grid;
-  width: 76%;
-  aspect-ratio: 1;
-  place-items: center;
-  margin-top: 18%;
-  border-radius: 50%;
-  background: white;
-}
-
-.score-gauge__center strong {
-  margin-top: -10%;
-  color: #263745;
-  font-size: 1.65rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.score-gauge--binder {
-  background: conic-gradient(
-    from 225deg,
-    #52bd85 0deg,
-    #52bd85 var(--score-angle),
-    #e8eef2 var(--score-angle),
-    #e8eef2 225deg,
-    #e8eef2 270deg,
-    transparent 270deg
-  );
 }
 
 .score-card-period {
