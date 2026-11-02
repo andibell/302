@@ -297,9 +297,9 @@ export function formatMetricValue(value, unit, compact = false) {
     return `${(value * 100).toFixed(1)}%`
   }
 
-  return new Intl.NumberFormat('en-GB', {
+  return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'GBP',
+    currency: 'USD',
     notation: compact ? 'compact' : 'standard',
     maximumFractionDigits: compact ? 1 : 0,
   }).format(value)

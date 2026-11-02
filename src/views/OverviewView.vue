@@ -119,9 +119,9 @@ const signalMetrics = computed(() => [
 ])
 
 function formatCurrency(value) {
-  return new Intl.NumberFormat('en-GB', {
+  return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'GBP',
+    currency: 'USD',
     maximumFractionDigits: 0,
   }).format(value)
 }
