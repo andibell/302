@@ -412,9 +412,9 @@ Production brand assets are stored in:
 Available logo variants:
 
 - `NimvaRisk-color.png`
-- `NimvaRisk-white.png`
+- `NimvaRisk-White.png`
 
-Use `NimvaRisk-white.png` on dark or navy backgrounds. Use `NimvaRisk-color.png` on light backgrounds where appropriate.
+Use `NimvaRisk-White.png` on dark or navy backgrounds. Use `NimvaRisk-color.png` on light backgrounds where appropriate.
 
 Use these application assets in the shell/navigation where the original application's branding appeared. They should replace original branding from the references. Do not recreate, modify, or substitute the Nimva Risk logo unless explicitly instructed. Do not use the original client logo.
 
@@ -455,7 +455,7 @@ src/
   assets/
     brand/
       NimvaRisk-color.png
-      NimvaRisk-white.png
+      NimvaRisk-White.png
   components/
     charts/
     common/
