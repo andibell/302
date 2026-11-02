@@ -1,18 +1,58 @@
 <script setup>
-import { ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import PrimaryNavigation from '../navigation/PrimaryNavigation.vue'
 
 const activePage = ref('overview')
 const activeProductSection = ref('performance')
+const activeDataView = ref('summary')
+const activeDataLine = ref('All lines of business')
+
+const pageHashes = {
+  overview: '#overview',
+  intelligence: '#portfolio-intelligence',
+  optimization: '#optimization',
+  data: '#data',
+}
+
+function applyLocation() {
+  const hash = window.location.hash
+  if (hash === '#data-quality') {
+    activePage.value = 'data'
+    activeDataView.value = 'quality'
+  } else {
+    const page = Object.keys(pageHashes).find(
+      (key) => pageHashes[key] === hash,
+    )
+    if (page) {
+      activePage.value = page
+      if (page === 'data') activeDataView.value = 'summary'
+    }
+  }
+}
 
 function navigateTo(page) {
   activePage.value = page
   activeProductSection.value = 'performance'
+  if (page === 'data') activeDataView.value = 'summary'
+  if (pageHashes[page]) window.location.hash = pageHashes[page]
 }
 
 function navigateProductSection(section) {
   activeProductSection.value = section
 }
+
+function navigateDataView(view, lineOfBusiness = 'All lines of business') {
+  activePage.value = 'data'
+  activeDataView.value = view
+  activeDataLine.value = lineOfBusiness
+  window.location.hash = view === 'quality' ? '#data-quality' : '#data'
+}
+
+onMounted(() => {
+  applyLocation()
+  window.addEventListener('hashchange', applyLocation)
+})
+onBeforeUnmount(() => window.removeEventListener('hashchange', applyLocation))
 </script>
 
 <template>
@@ -89,13 +129,22 @@ function navigateProductSection(section) {
           ? 'Portfolio Intelligence'
           : activePage === 'overview'
             ? 'Portfolio overview'
+            : activePage === 'optimization'
+              ? 'Optimization scenario planning'
+            : activePage === 'data'
+              ? activeDataView === 'quality'
+                ? 'Data Quality detail'
+                : 'Portfolio data'
             : 'Application workspace'
       "
     >
       <slot
         :active-page="activePage"
         :active-product-section="activeProductSection"
+        :active-data-view="activeDataView"
+        :active-data-line="activeDataLine"
         :navigate-product-section="navigateProductSection"
+        :navigate-data-view="navigateDataView"
       />
     </main>
   </div>

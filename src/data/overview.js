@@ -1,3 +1,8 @@
+import {
+  calculateOverallQualityScore,
+  getSyntheticQualityDimensions,
+} from './qualityMetrics.js'
+
 const segmentDefinitions = [
   {
     lineOfBusiness: 'Commercial Property',
@@ -111,6 +116,10 @@ export const portfolioObservations = periods.flatMap(({ date, index }) => {
           (expectedLossRatio +
             emergence * subproduct.lossFactor * region.lossFactor)
         const policyCount = Math.round(segmentPolicyCount * weight)
+        const qualityScores = getSyntheticQualityDimensions(
+          segment.lineOfBusiness,
+          index,
+        )
 
         return {
           period: date,
@@ -127,11 +136,8 @@ export const portfolioObservations = periods.flatMap(({ date, index }) => {
           claimCount: Math.round((policyCount * claimFrequency) / 100),
           claimFrequency,
           expectedClaimFrequency,
-          dataQualityScore:
-            segment.lineOfBusiness === 'Small Business Property' &&
-            index >= 20
-              ? 88
-              : 96,
+          ...qualityScores,
+          dataQualityScore: calculateOverallQualityScore(qualityScores),
         }
       }),
     )
@@ -290,11 +296,7 @@ export function aggregatePortfolioRows(rows) {
       'expectedClaimFrequency',
       'policyCount',
     ),
-    dataQualityScore: weightedAverage(
-      rows,
-      'dataQualityScore',
-      'writtenPremium',
-    ),
+    dataQualityScore: weightedQualityScore(rows),
     policyCount: sum(rows, 'policyCount'),
     claimCount: sum(rows, 'claimCount'),
   }
@@ -324,6 +326,21 @@ function weightedAverage(rows, valueField, weightField) {
         0,
       ) / totalWeight
     : 0
+}
+
+function weightedQualityScore(rows) {
+  const totalRecords = rows.reduce(
+    (total, row) => total + row.policyCount + row.claimCount,
+    0,
+  )
+  return totalRecords
+    ? rows.reduce(
+        (total, row) =>
+          total +
+          row.dataQualityScore * (row.policyCount + row.claimCount),
+        0,
+      ) / totalRecords
+    : null
 }
 
 function summarize(rows) {

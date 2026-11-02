@@ -16,6 +16,20 @@ import {
   getPremiumYearOverYearComparison,
   intelligenceMetrics,
 } from '../src/data/portfolioAnalytics.js'
+import {
+  aggregateQualityObservations,
+  availableQualityPeriods,
+  calculateOverallQualityScore,
+  dataQualityObservations,
+  getLatestQualityPeriod,
+  getPreviousQualityPeriod,
+  getQualityAnomalies,
+  getQualitySummary,
+  getQualityTrend,
+  qualityDimensions,
+  qualityWeights,
+} from '../src/data/dataQuality.js'
+import { getOptimizationScenario } from '../src/data/optimizationScenario.js'
 
 const latestPeriod = '2026-06'
 
@@ -146,6 +160,108 @@ test('loss ratios are derived from loss and earned premium, not duplicated field
   )
 })
 
+test('optimization scenario starts from observed Small Business Property results', () => {
+  const observed = getIntelligenceAnalysis({
+    periodId: 'month',
+    lineOfBusiness: 'Small Business Property',
+  }).latest
+  const scenario = getOptimizationScenario()
+
+  assert.equal(scenario.latestPeriod, latestPeriod)
+  assert.equal(scenario.targetSegment, 'Small Business Property')
+  assert.equal(scenario.actualLossRatio, observed.lossRatio)
+  assert.equal(scenario.expectedLossRatio, observed.expectedLossRatio)
+  assert.equal(scenario.historical.length, 12)
+  assert.equal(scenario.projections.length, 6)
+})
+
+test('optimization scenario separates historical and projected periods', () => {
+  const scenario = getOptimizationScenario()
+  const lastHistorical = scenario.historical.at(-1)
+  const firstProjection = scenario.projections[0]
+
+  assert.equal(lastHistorical.period, scenario.latestPeriod)
+  assert.equal(firstProjection.period, '2026-07')
+  assert.ok(
+    Math.abs(
+      firstProjection.statusQuoIncurredLoss -
+        observedPremium(scenario) *
+          (1 + scenario.retentionImpact) *
+          scenario.actualLossRatio,
+    ) < 1e-8,
+  )
+  assert.equal(
+    firstProjection.optimizedLossRatio,
+    (scenario.actualLossRatio -
+      (scenario.actualLossRatio - scenario.expectedLossRatio) * 0.1) *
+      (scenario.exposureMultiplier / scenario.premiumMultiplier),
+  )
+  assert.ok(
+    scenario.projections.every(
+      ({ optimizedLossRatio }) =>
+        optimizedLossRatio > scenario.expectedLossRatio &&
+        optimizedLossRatio < scenario.actualLossRatio,
+    ),
+  )
+  assert.ok(
+    scenario.projections.every(
+      ({ optimizedLossRatio }, index, projections) =>
+        index === 0 ||
+        optimizedLossRatio < projections[index - 1].optimizedLossRatio,
+    ),
+  )
+})
+
+test('optimization scenario calculates modeled loss difference from premium and ratios', () => {
+  const scenario = getOptimizationScenario()
+  const expectedDifference = scenario.projections.reduce(
+    (total, point) =>
+      total +
+      point.earnedPremium *
+        (point.statusQuoLossRatio - point.optimizedLossRatio),
+    0,
+  )
+  const noRateChange = getOptimizationScenario({ rateAdjustment: 0 })
+
+  assert.ok(Math.abs(scenario.modeledLossDifference - expectedDifference) < 1e-8)
+  assert.ok(scenario.modeledLossDifference > 0)
+  assert.ok(
+    scenario.projectedEarnedPremium >
+      noRateChange.projectedEarnedPremium,
+  )
+  assert.equal(
+    scenario.modeledLossDifference,
+    noRateChange.modeledLossDifference,
+  )
+  assert.ok(
+    scenario.projectedStatusQuoLossRatio <
+      noRateChange.projectedStatusQuoLossRatio,
+  )
+  assert.equal(
+    getOptimizationScenario({ projectionMonths: 3 }).projections.length,
+    3,
+  )
+})
+
+function observedPremium(scenario) {
+  return getIntelligenceAnalysis({
+    periodId: 'month',
+    lineOfBusiness: scenario.targetSegment,
+  }).latest.earnedPremium
+}
+
+test('optimization scenario carries the segment-specific data quality context', () => {
+  const scenario = getOptimizationScenario()
+  const quality = getQualitySummary({
+    period: getLatestQualityPeriod(),
+    lineOfBusiness: 'Small Business Property',
+  })
+
+  assert.equal(scenario.dataQualityScore, quality.overallScore)
+  assert.equal(scenario.dataQualityStatus, quality.status)
+  assert.equal(scenario.actions.length, 4)
+})
+
 test('tabular hierarchy agrees with shared analysis for required scenarios', () => {
   const scenarios = [
     { periodId: 'month' },
@@ -205,3 +321,88 @@ test('tabular parent loss ratios use aggregated losses and premium', () => {
 function collectIds(node) {
   return [node.id, ...node.children.flatMap(collectIds)]
 }
+
+test('data quality scoring is weighted and internally consistent', () => {
+  const latestPeriod = getLatestQualityPeriod()
+  const portfolio = getQualitySummary({ period: latestPeriod })
+  const smallBusiness = getQualitySummary({
+    period: latestPeriod,
+    lineOfBusiness: 'Small Business Property',
+  })
+
+  assert.equal(
+    Object.values(qualityWeights).reduce((total, weight) => total + weight, 0),
+    1,
+  )
+  assert.equal(
+    portfolio.overallScore,
+    calculateOverallQualityScore(portfolio.dimensions),
+  )
+  assert.ok(
+    Math.abs(
+      aggregatePortfolioRows(
+        portfolioObservations.filter(({ period }) => period === latestPeriod),
+      ).dataQualityScore - portfolio.overallScore,
+    ) < 1e-10,
+  )
+  assert.ok(portfolio.overallScore >= 90 && portfolio.overallScore <= 94)
+  assert.ok(Math.abs(smallBusiness.overallScore - 82.9) < 0.01)
+  assert.equal(
+    smallBusiness.dimensions.completenessScore,
+    76,
+  )
+  assert.equal(smallBusiness.dimensions.timelinessScore, 78)
+  assert.ok(smallBusiness.dimensions.validityScore >= 90)
+  assert.ok(smallBusiness.dimensions.consistencyScore >= 90)
+  assert.equal(
+    dataQualityObservations.at(-1).overallQualityScore,
+    calculateOverallQualityScore(
+      Object.fromEntries(
+        qualityDimensions.map(({ id }) => [
+          id,
+          dataQualityObservations.at(-1)[id],
+        ]),
+      ),
+    ),
+  )
+})
+
+test('data quality trends, previous periods, and observations follow active filters', () => {
+  const latestPeriod = getLatestQualityPeriod()
+  const previousPeriod = getPreviousQualityPeriod(latestPeriod)
+  const allPortfolio = getQualitySummary({ period: latestPeriod })
+  const allPrior = getQualitySummary({ period: previousPeriod })
+  const smallBusiness = getQualitySummary({
+    period: latestPeriod,
+    lineOfBusiness: 'Small Business Property',
+  })
+  const smallBusinessPrior = getQualitySummary({
+    period: previousPeriod,
+    lineOfBusiness: 'Small Business Property',
+  })
+  const trend = getQualityTrend({
+    throughPeriod: latestPeriod,
+    lineOfBusiness: 'Small Business Property',
+  })
+
+  assert.equal(availableQualityPeriods.length, 24)
+  assert.ok(allPortfolio.overallScore >= 90)
+  assert.ok(allPortfolio.overallScore < allPrior.overallScore)
+  assert.ok(smallBusiness.overallScore < smallBusinessPrior.overallScore)
+  assert.equal(trend.at(-1).period, latestPeriod)
+  assert.ok(trend.length <= 12)
+  assert.ok(
+    getQualityAnomalies({
+      period: latestPeriod,
+      lineOfBusiness: 'Small Business Property',
+    }).length >= 2,
+  )
+  assert.equal(
+    getQualityAnomalies({
+      period: latestPeriod,
+      lineOfBusiness: 'Commercial Property',
+    }).length,
+    0,
+  )
+  assert.ok(aggregateQualityObservations([]).overallScore === null)
+})

@@ -2,6 +2,7 @@
 import AppShell from './components/common/AppShell.vue'
 import OverviewView from './views/OverviewView.vue'
 import IntelligenceView from './views/IntelligenceView.vue'
+import OptimizationView from './views/OptimizationView.vue'
 import DataView from './views/DataView.vue'
 import DataQualityView from './views/DataQualityView.vue'
 </script>
@@ -23,6 +24,7 @@ import DataQualityView from './views/DataQualityView.vue'
       :active-product-section="activeProductSection"
       @navigate-product-section="navigateProductSection"
     />
+    <OptimizationView v-else-if="activePage === 'optimization'" />
     <DataView
       v-else-if="activePage === 'data' && activeDataView === 'summary'"
       @open-quality="navigateDataView('quality', $event)"
