@@ -9,8 +9,10 @@ import {
   getAvailableDimensionValues,
   getDatesForReportingPeriod,
   getIntelligenceAnalysis,
+  getLossRatioVariance,
   getMetricPointValue,
   getPortfolioBreakdown,
+  getPortfolioHierarchy,
   getPremiumYearOverYearComparison,
   intelligenceMetrics,
 } from '../src/data/portfolioAnalytics.js'
@@ -143,3 +145,63 @@ test('loss ratios are derived from loss and earned premium, not duplicated field
     ),
   )
 })
+
+test('tabular hierarchy agrees with shared analysis for required scenarios', () => {
+  const scenarios = [
+    { periodId: 'month' },
+    { periodId: 'month', lineOfBusiness: 'Small Business Property' },
+    { periodId: 'month', lineOfBusiness: 'Commercial Property' },
+    { periodId: 'month', region: 'Central' },
+    { periodId: 'ytd' },
+  ]
+
+  for (const scenario of scenarios) {
+    const analysis = getIntelligenceAnalysis(scenario)
+    const hierarchy = getPortfolioHierarchy(analysis.rows)
+    const expected = analysis.summary
+
+    assert.equal(hierarchy.summary.earnedPremium, expected.earnedPremium)
+    assert.equal(hierarchy.summary.incurredLoss, expected.incurredLoss)
+    assert.equal(
+      hierarchy.summary.expectedIncurredLoss,
+      expected.expectedIncurredLoss,
+    )
+    assert.equal(hierarchy.summary.lossRatio, expected.lossRatio)
+    assert.equal(
+      hierarchy.summary.expectedLossRatio,
+      expected.expectedLossRatio,
+    )
+    assert.equal(
+      hierarchy.variance,
+      getLossRatioVariance(expected),
+    )
+  }
+})
+
+test('tabular parent loss ratios use aggregated losses and premium', () => {
+  const analysis = getIntelligenceAnalysis({
+    periodId: 'month',
+    lineOfBusiness: 'Small Business Property',
+  })
+  const hierarchy = getPortfolioHierarchy(analysis.rows)
+  const smallBusiness = hierarchy.children[0]
+  const childRatioAverage =
+    smallBusiness.children.reduce(
+      (total, child) => total + child.summary.lossRatio,
+      0,
+    ) / smallBusiness.children.length
+
+  assert.equal(
+    smallBusiness.summary.lossRatio,
+    smallBusiness.summary.incurredLoss /
+      smallBusiness.summary.earnedPremium,
+  )
+  assert.notEqual(smallBusiness.summary.lossRatio, childRatioAverage)
+  assert.ok(Math.abs(smallBusiness.variance * 100 - 28) < 0.1)
+  assert.equal(new Set(collectIds(hierarchy)).size, collectIds(hierarchy).length)
+  assert.equal(getPortfolioHierarchy([]).variance, null)
+})
+
+function collectIds(node) {
+  return [node.id, ...node.children.flatMap(collectIds)]
+}

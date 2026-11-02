@@ -212,6 +212,54 @@ export function getPortfolioBreakdown(rows, dimension) {
     .sort((left, right) => right.incurredLoss - left.incurredLoss)
 }
 
+export function getLossRatioVariance(summary) {
+  if (summary.lossRatio === null || summary.expectedLossRatio === null) {
+    return null
+  }
+  return summary.lossRatio - summary.expectedLossRatio
+}
+
+export function getPortfolioHierarchy(rows) {
+  const dimensions = ['lineOfBusiness', 'subproduct', 'region']
+
+  function groupRows(observations, depth, parentId) {
+    const dimension = dimensions[depth]
+    if (!dimension) return []
+
+    const groups = new Map()
+    for (const row of observations) {
+      const label = row[dimension]
+      if (!groups.has(label)) groups.set(label, [])
+      groups.get(label).push(row)
+    }
+
+    return [...groups.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([label, group]) => {
+        const id = `${parentId}/${dimension}:${encodeURIComponent(label)}`
+        const summary = aggregatePortfolioRows(group)
+        return {
+          id,
+          label,
+          depth: depth + 1,
+          summary,
+          variance: getLossRatioVariance(summary),
+          children: groupRows(group, depth + 1, id),
+        }
+      })
+  }
+
+  const summary = aggregatePortfolioRows(rows)
+  return {
+    id: 'portfolio',
+    label: 'Portfolio',
+    depth: 0,
+    summary,
+    variance: getLossRatioVariance(summary),
+    children: groupRows(rows, 0, 'portfolio'),
+  }
+}
+
 export function getAvailableDimensionValues(rows, dimension) {
   return [...new Set(rows.map((row) => row[dimension]).filter(Boolean))].sort()
 }

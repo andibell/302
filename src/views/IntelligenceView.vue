@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import BreakdownChart from '../components/charts/BreakdownChart.vue'
 import TrendChart from '../components/charts/TrendChart.vue'
 import ProductNavigation from '../components/navigation/ProductNavigation.vue'
+import PortfolioTable from '../components/portfolio/PortfolioTable.vue'
 import {
   breakdownMeasures,
   formatMetricValue,
@@ -29,6 +30,7 @@ const props = defineProps({
 
 const emit = defineEmits(['navigate-product-section'])
 
+const viewMode = ref('visual')
 const selectedPeriod = ref('itd')
 const selectedMetricId = ref('lossRatio')
 const selectedDimension = ref('lineOfBusiness')
@@ -290,19 +292,27 @@ async function shareView() {
   <div class="intelligence-view">
     <div class="view-mode-row">
       <div class="view-mode-toggle" role="group" aria-label="View mode">
-        <button class="is-active" type="button" aria-pressed="true">
+        <button
+          type="button"
+          :class="{ 'is-active': viewMode === 'visual' }"
+          :aria-pressed="viewMode === 'visual'"
+          @click="viewMode = 'visual'"
+        >
           Visual
         </button>
         <button
           type="button"
-          disabled
-          aria-disabled="true"
-          title="The Tabular view is planned for a later stage."
+          :class="{ 'is-active': viewMode === 'tabular' }"
+          :aria-pressed="viewMode === 'tabular'"
+          @click="viewMode = 'tabular'"
         >
           Tabular
         </button>
       </div>
     </div>
+    <p class="visually-hidden" role="status" aria-live="polite">
+      {{ viewMode === 'visual' ? 'Visual analysis selected' : 'Tabular analysis selected' }}
+    </p>
 
     <div class="intelligence-toolbar">
       <ProductNavigation
@@ -402,6 +412,7 @@ async function shareView() {
       </div>
     </div>
 
+    <template v-if="viewMode === 'visual'">
     <section class="analysis-section" aria-labelledby="loss-emergence-title">
       <header class="analysis-heading">
         <div class="analysis-heading__metric">
@@ -580,6 +591,18 @@ async function shareView() {
         {{ marginImpactSummary }}
       </p>
     </section>
+    </template>
+    <PortfolioTable
+      v-else
+      :analysis="analysis"
+      :latest-analysis="latestPeriodAnalysis"
+      :portfolio-latest-analysis="analysis"
+      :period-id="selectedPeriod"
+      :line-of-business="selectedLineOfBusiness"
+      :subproduct="selectedSubproduct"
+      :region="selectedRegion"
+      @update:period="selectedPeriod = $event"
+    />
   </div>
 </template>
 
@@ -619,17 +642,13 @@ async function shareView() {
   background: transparent;
   color: #607d98;
   font-size: 0.8rem;
+  cursor: pointer;
 }
 
 .view-mode-toggle button.is-active {
   background: white;
   color: var(--intelligence-indigo);
   box-shadow: 0 1px 3px rgb(22 43 63 / 12%);
-}
-
-.view-mode-toggle button:disabled {
-  cursor: not-allowed;
-  opacity: 0.76;
 }
 
 .intelligence-toolbar {
