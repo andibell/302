@@ -26,8 +26,9 @@ const sections = [
         class="product-navigation__link"
         :class="{ 'is-active': activeSection === section.id }"
         type="button"
+        :disabled="section.id !== 'performance'"
         :aria-current="activeSection === section.id ? 'page' : undefined"
-        @click="emit('navigate', section.id)"
+        @click="section.id === 'performance' && emit('navigate', section.id)"
       >
         {{ section.label }}
       </button>

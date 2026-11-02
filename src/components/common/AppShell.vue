@@ -1,13 +1,17 @@
 <script setup>
 import { ref } from 'vue'
 import PrimaryNavigation from '../navigation/PrimaryNavigation.vue'
-import ProductNavigation from '../navigation/ProductNavigation.vue'
 
 const activePage = ref('overview')
 const activeProductSection = ref('performance')
 
 function navigateTo(page) {
   activePage.value = page
+  activeProductSection.value = 'performance'
+}
+
+function navigateProductSection(section) {
+  activeProductSection.value = section
 }
 </script>
 
@@ -77,18 +81,22 @@ function navigateTo(page) {
       @navigate="navigateTo"
     />
 
-    <ProductNavigation
-      v-if="activePage === 'intelligence'"
-      :active-section="activeProductSection"
-      @navigate="activeProductSection = $event"
-    />
-
     <main
       id="main-content"
       class="application-main"
-      :aria-label="activePage === 'intelligence' ? 'Portfolio Intelligence' : 'Application workspace'"
+      :aria-label="
+        activePage === 'intelligence'
+          ? 'Portfolio Intelligence'
+          : activePage === 'overview'
+            ? 'Portfolio overview'
+            : 'Application workspace'
+      "
     >
-      <slot v-if="activePage === 'overview'" />
+      <slot
+        :active-page="activePage"
+        :active-product-section="activeProductSection"
+        :navigate-product-section="navigateProductSection"
+      />
     </main>
   </div>
 </template>

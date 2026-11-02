@@ -7,6 +7,10 @@ const segmentDefinitions = [
     retention: 0.79,
     rateChange: 0.043,
     policyCount: 480,
+    subproducts: [
+      { name: 'Commercial Property Package', weight: 0.5, lossFactor: 0.92 },
+      { name: 'Scheduled Property', weight: 0.5, lossFactor: 1.08 },
+    ],
   },
   {
     lineOfBusiness: 'Inland Marine',
@@ -16,6 +20,10 @@ const segmentDefinitions = [
     retention: 0.81,
     rateChange: 0.039,
     policyCount: 290,
+    subproducts: [
+      { name: 'Contractors Equipment', weight: 0.58, lossFactor: 0.9 },
+      { name: 'Marine Cargo', weight: 0.42, lossFactor: 1.1 },
+    ],
   },
   {
     lineOfBusiness: 'General Liability',
@@ -25,6 +33,10 @@ const segmentDefinitions = [
     retention: 0.76,
     rateChange: 0.041,
     policyCount: 360,
+    subproducts: [
+      { name: 'Premises Liability', weight: 0.62, lossFactor: 0.9 },
+      { name: 'Products Liability', weight: 0.38, lossFactor: 1.1 },
+    ],
   },
   {
     lineOfBusiness: 'Small Business Property',
@@ -34,7 +46,17 @@ const segmentDefinitions = [
     retention: 0.77,
     rateChange: 0.036,
     policyCount: 190,
+    subproducts: [
+      { name: 'Businessowners Policy', weight: 0.68, lossFactor: 0.78 },
+      { name: 'Small Commercial Property', weight: 0.32, lossFactor: 1.4675 },
+    ],
   },
+]
+
+const regions = [
+  { name: 'Northeast', premiumWeight: 0.36, lossFactor: 0.88 },
+  { name: 'Central', premiumWeight: 0.34, lossFactor: 1 },
+  { name: 'West', premiumWeight: 0.3, lossFactor: 1.14 },
 ]
 
 const periods = Array.from({ length: 24 }, (_, index) => {
@@ -63,14 +85,11 @@ function lossRatioEmergence(index, lineOfBusiness) {
 export const portfolioObservations = periods.flatMap(({ date, index }) => {
   const portfolioWrittenPremium = 585_000 * (1 + index * 0.006)
 
-  return segmentDefinitions.map((segment) => {
-    const writtenPremium = portfolioWrittenPremium * segment.premiumShare
-    const earnedPremium = writtenPremium * (0.96 + (index % 4) * 0.002)
-    const expectedLossRatio = segment.expectedLossRatio
-    const actualLossRatio =
-      expectedLossRatio +
-      lossRatioEmergence(index, segment.lineOfBusiness)
-    const policyCount = Math.round(
+  return segmentDefinitions.flatMap((segment) => {
+    const segmentWrittenPremium =
+      portfolioWrittenPremium * segment.premiumShare
+    const emergence = lossRatioEmergence(index, segment.lineOfBusiness)
+    const segmentPolicyCount = Math.round(
       segment.policyCount * (1 + index * 0.004),
     )
     const expectedClaimFrequency = segment.claimFrequency
@@ -80,22 +99,42 @@ export const portfolioObservations = periods.flatMap(({ date, index }) => {
         ? (index - 19) * 0.12
         : 0)
 
-    return {
-      period: date,
-      lineOfBusiness: segment.lineOfBusiness,
-      writtenPremium,
-      earnedPremium,
-      incurredLoss: earnedPremium * actualLossRatio,
-      expectedIncurredLoss: earnedPremium * expectedLossRatio,
-      lossRatio: actualLossRatio,
-      expectedLossRatio,
-      rateChange: segment.rateChange,
-      retention: segment.retention,
-      policyCount,
-      claimCount: Math.round((policyCount * claimFrequency) / 100),
-      claimFrequency,
-      expectedClaimFrequency,
-    }
+    return segment.subproducts.flatMap((subproduct) =>
+      regions.map((region) => {
+        const weight = subproduct.weight * region.premiumWeight
+        const writtenPremium = segmentWrittenPremium * weight
+        const earnedPremium =
+          writtenPremium * (0.96 + (index % 4) * 0.002)
+        const expectedLossRatio = segment.expectedLossRatio
+        const incurredLoss =
+          earnedPremium *
+          (expectedLossRatio +
+            emergence * subproduct.lossFactor * region.lossFactor)
+        const policyCount = Math.round(segmentPolicyCount * weight)
+
+        return {
+          period: date,
+          lineOfBusiness: segment.lineOfBusiness,
+          subproduct: subproduct.name,
+          region: region.name,
+          writtenPremium,
+          earnedPremium,
+          incurredLoss,
+          expectedIncurredLoss: earnedPremium * expectedLossRatio,
+          rateChange: segment.rateChange,
+          retention: segment.retention,
+          policyCount,
+          claimCount: Math.round((policyCount * claimFrequency) / 100),
+          claimFrequency,
+          expectedClaimFrequency,
+          dataQualityScore:
+            segment.lineOfBusiness === 'Small Business Property' &&
+            index >= 20
+              ? 88
+              : 96,
+        }
+      }),
+    )
   })
 })
 
@@ -103,6 +142,16 @@ export const lineOfBusinessOptions = [
   'All lines of business',
   ...segmentDefinitions.map(({ lineOfBusiness }) => lineOfBusiness),
 ]
+
+export const subproductOptions = [
+  ...new Set(
+    segmentDefinitions.flatMap(({ subproducts }) =>
+      subproducts.map(({ name }) => name),
+    ),
+  ),
+]
+
+export const regionOptions = ['Northeast', 'Central', 'West']
 
 export const portfolioAlerts = [
   {
@@ -212,6 +261,61 @@ function sum(rows, field) {
   return rows.reduce((total, row) => total + row[field], 0)
 }
 
+export function calculateLossRatio(rows, lossField) {
+  const earnedPremium = sum(rows, 'earnedPremium')
+  return earnedPremium
+    ? sum(rows, lossField) / earnedPremium
+    : null
+}
+
+export function aggregatePortfolioRows(rows) {
+  const earnedPremium = sum(rows, 'earnedPremium')
+  const incurredLoss = sum(rows, 'incurredLoss')
+  const expectedIncurredLoss = sum(rows, 'expectedIncurredLoss')
+
+  return {
+    writtenPremium: sum(rows, 'writtenPremium'),
+    earnedPremium,
+    incurredLoss,
+    expectedIncurredLoss,
+    lossRatio: earnedPremium ? incurredLoss / earnedPremium : null,
+    expectedLossRatio: earnedPremium
+      ? expectedIncurredLoss / earnedPremium
+      : null,
+    retention: weightedAverage(rows, 'retention', 'writtenPremium'),
+    rateChange: weightedAverage(rows, 'rateChange', 'writtenPremium'),
+    claimFrequency: weightedAverage(rows, 'claimFrequency', 'policyCount'),
+    expectedClaimFrequency: weightedAverage(
+      rows,
+      'expectedClaimFrequency',
+      'policyCount',
+    ),
+    dataQualityScore: weightedAverage(
+      rows,
+      'dataQualityScore',
+      'writtenPremium',
+    ),
+    policyCount: sum(rows, 'policyCount'),
+    claimCount: sum(rows, 'claimCount'),
+  }
+}
+
+export function filterPortfolioObservations(
+  rows,
+  { lineOfBusiness, subproduct, region } = {},
+) {
+  return rows.filter(
+    (row) =>
+      (!lineOfBusiness ||
+        lineOfBusiness === 'All lines of business' ||
+        row.lineOfBusiness === lineOfBusiness) &&
+      (!subproduct ||
+        subproduct === 'All subproducts' ||
+        row.subproduct === subproduct) &&
+      (!region || region === 'All regions' || row.region === region),
+  )
+}
+
 function weightedAverage(rows, valueField, weightField) {
   const totalWeight = sum(rows, weightField)
   return totalWeight
@@ -223,30 +327,7 @@ function weightedAverage(rows, valueField, weightField) {
 }
 
 function summarize(rows) {
-  return {
-    writtenPremium: sum(rows, 'writtenPremium'),
-    earnedPremium: sum(rows, 'earnedPremium'),
-    incurredLoss: sum(rows, 'incurredLoss'),
-    expectedIncurredLoss: sum(rows, 'expectedIncurredLoss'),
-    lossRatio: sum(rows, 'earnedPremium')
-      ? sum(rows, 'incurredLoss') / sum(rows, 'earnedPremium')
-      : 0,
-    expectedLossRatio: sum(rows, 'earnedPremium')
-      ? sum(rows, 'expectedIncurredLoss') / sum(rows, 'earnedPremium')
-      : 0,
-    retention: weightedAverage(rows, 'retention', 'writtenPremium'),
-    rateChange: weightedAverage(rows, 'rateChange', 'writtenPremium'),
-    claimFrequency: weightedAverage(
-      rows,
-      'claimFrequency',
-      'policyCount',
-    ),
-    expectedClaimFrequency: weightedAverage(
-      rows,
-      'expectedClaimFrequency',
-      'policyCount',
-    ),
-  }
+  return aggregatePortfolioRows(rows)
 }
 
 export function getOverviewSummary(
@@ -255,11 +336,7 @@ export function getOverviewSummary(
 ) {
   const windowSize = period === 'month' ? 1 : 12
   const selectedRows =
-    lineOfBusiness === lineOfBusinessOptions[0]
-      ? portfolioObservations
-      : portfolioObservations.filter(
-          (row) => row.lineOfBusiness === lineOfBusiness,
-        )
+    filterPortfolioObservations(portfolioObservations, { lineOfBusiness })
   const latestPeriod = portfolioObservations.at(-1).period
   const visibleDates = [
     ...new Set(selectedRows.map((row) => row.period)),
