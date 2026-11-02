@@ -704,20 +704,6 @@ function selectPeriod(period) {
   stroke-linecap: round;
 }
 
-.overview-gauge__pivot {
-  fill: #344756;
-}
-
-.overview-gauge__marker {
-  fill: white;
-  stroke: var(--color-success);
-  stroke-width: 4;
-}
-
-.overview-gauge--warning .overview-gauge__marker {
-  stroke: #f47839;
-}
-
 .status-badge {
   display: inline-flex;
   align-items: center;

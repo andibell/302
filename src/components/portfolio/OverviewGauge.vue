@@ -38,14 +38,7 @@ const needleRotation = computed(() => -90 + progress.value * 180)
     />
     <g :transform="`rotate(${needleRotation} 60 60)`">
       <line class="overview-gauge__needle" x1="60" y1="60" x2="60" y2="23" />
-      <circle class="overview-gauge__pivot" cx="60" cy="60" r="4" />
     </g>
-    <circle
-      class="overview-gauge__marker"
-      :cx="10 + progress * 100"
-      cy="60"
-      r="5"
-    />
   </svg>
 </template>
 
@@ -73,19 +66,5 @@ const needleRotation = computed(() => -90 + progress.value * 180)
   stroke: #344756;
   stroke-width: 7;
   stroke-linecap: round;
-}
-
-.overview-gauge__pivot {
-  fill: #344756;
-}
-
-.overview-gauge__marker {
-  fill: white;
-  stroke: #15803d;
-  stroke-width: 4;
-}
-
-.overview-gauge--warning .overview-gauge__marker {
-  stroke: #f47839;
 }
 </style>
